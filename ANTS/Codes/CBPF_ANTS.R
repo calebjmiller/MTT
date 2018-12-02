@@ -3,6 +3,52 @@
 
 #### Functions in (roughly) order of appearance in the paper 
 #### Plus auxilliary function needed for processing
+setwd('/home/cjm/Desktop/MTT/ANTS/Codes/')
+set.seed(1)
+#############################################################################
+### Image processing functions
+### image_read
+### Inputs:
+###   frame_num - an index depending on where you are in the tracking
+### Outputs:
+###   frame - gives you the frame corresponding to that index (usually used for plotting)
+### frame_to_xy
+### Inputs:
+###   frame - the frame that you're on
+### Outputs:
+###   framexy - this is converted to xy (this frmexy is used for everything else)
+#############################################################################
+
+
+image_read<-function(frame_num){
+  # make string
+  lookup <- paste("pngFrames/frame",toString(frame_num),".png",sep = "")
+  # get photo
+  frame <- readPNG(lookup)
+  # gray the photo
+  frame <- .21*frame[,,1]+.72*frame[,,2]+.07*frame[,,3]
+  
+  # for plotting purposes
+  df <- dim(frame)
+  # create a blank canvas (*** edit to change 1 to frame num in the title after main =)
+  plot(c(0,df[2]),c(0,df[1]),type="n",axes=F,xlab = "",ylab = "", main="frame 1")
+  rasterImage(frame,0,0,df[2],df[1])
+  
+  return(frame)
+}
+
+frame_to_xy<-function(frame){
+  # get the right coordinates for operations (xy the photo)
+  framexy<-t(frame[nrow(frame):1,])
+  
+  return(framexy)
+}
+
+
+
+
+
+
 
 ##############################################################################
 ### Pixel Weighting function 
@@ -56,12 +102,7 @@ k<-function(xc,yc,theta,x,y){
 ###     tr$bins - labeled bins for the data
 ##############################################################################
 
-# Aux frame_to_xy
-frame_to_xy<-function(frame){
-  framexy<-t(frame1[nrow(frame):1,])
-  return(framexy)
-}
-
+#(***) since nlevels is global I should remove it from this and pass it instead
 get_rect<-function(xc,yc,theta,framexy){
   
   # Parameters used to form rectangle with center at (0,0)
@@ -102,7 +143,7 @@ get_rect<-function(xc,yc,theta,framexy){
   
   for(i in 1:trackboxwidth){
     for(j in 1:trackboxheight){
-      trakc_rect[j,i]<-(1-fracx[j,i])*(1-fracy[j,i])*framexy[interiorpointsx[j,i],interiorpointsy[j,i]] +fracx[j,i]*(1-fracy[j,i])*framexy[interiorpointsx[j,i]+1,interiorpointsy[j,i]]+(1-fracx[j,i])*fracy[j,i]*framexy[interiorpointsx[j,i],interiorpointsy[j,i]+1]+fracx[j,i]*fracy[j,i]*framexy[interiorpointsx[j,i]+1,interiorpointsy[j,i]+1]
+      track_rect[j,i]<-(1-fracx[j,i])*(1-fracy[j,i])*framexy[interiorpointsx[j,i],interiorpointsy[j,i]] +fracx[j,i]*(1-fracy[j,i])*framexy[interiorpointsx[j,i]+1,interiorpointsy[j,i]]+(1-fracx[j,i])*fracy[j,i]*framexy[interiorpointsx[j,i],interiorpointsy[j,i]+1]+fracx[j,i]*fracy[j,i]*framexy[interiorpointsx[j,i]+1,interiorpointsy[j,i]+1]
     }  
   }
   
@@ -116,17 +157,17 @@ get_rect<-function(xc,yc,theta,framexy){
   # Flatten data to put into the data frame
   dim_tot <- trackboxwidth*trackboxheight
   
-  dim(template)        <- c(dim_tot,1)
+  dim(track_rect)        <- c(dim_tot,1)
   dim(interiorpointsx) <- c(dim_tot,1)
   dim(interiorpointsy) <- c(dim_tot,1)
   dim(cut_temp)        <- c(dim_tot,1)
   
   # Make that data frame (tr for tracking rectangle)
   tr<- data.frame(
-    color  <- track_rect,
-    x      <- interiorpointsx,
-    y      <- interiorpointsy,
-    bins   <- cut_temp
+    color  = track_rect,
+    x      = interiorpointsx,
+    y      = interiorpointsy,
+    bins   = cut_temp
   )
   return(tr)
 }
@@ -142,8 +183,9 @@ get_rect<-function(xc,yc,theta,framexy){
 ##############################################################################
 
 # See about combining xc,yc,theta into the tr data frame
+#(***) doing a really sloppy fix for nlevels here I should make it better
 
-get_p<-function(xc,yc,theta,tr){
+get_p<-function(xc,yc,theta,tr,nlevels){
   
   
   # The color distribution to be filled
@@ -154,7 +196,7 @@ get_p<-function(xc,yc,theta,tr){
   
   # For each level sum weights of points assigned to that level
   for(i in 1:nlevels){
-    cond <- tf$bins == bins_lvl[i]
+    cond <- tr$bins == bins_lvl[i]
     p[i] <- sum(k(xc,yc,theta,tr$x[cond],tr$y[cond]))
   }
   
@@ -225,11 +267,12 @@ motion<-function(xc,yc,theta){
 ### Outputs:
 ###   spi - sample weight
 ##############################################################################
-
+# (*** sigma_sq = 1/40 is super arbitrary)
 get_spi<-function(p,d,q){
   # dont know what to put for this sigma at the moment
-  simga_sq <- 1
+  sigma_sq <- 1/40
   spi<-1/sqrt(2*pi*sigma_sq)*exp(-d^2/(2*sigma_sq))
+  return(spi) #added a return
 }
 
 
@@ -239,37 +282,36 @@ get_spi<-function(p,d,q){
 ### Inputs:
 ###   S - array of samples
 ###   Pi - array of weights
+###   N - number of samples
 ### Outputs:
 ###   S_prime - selected samples
 ##############################################################################
 
-select <-function(S,Pi){
-  # Length
-  N=length(S)
+select <-function(S,Pi,N){
   # Get cumulative probabilities and normalize
   cp <- matrix(0,N+1,1)
   for(i in 1:N){
-    cp[i+1]=sum(cp)+Pi[i]
-    print(cp)
+    cp[i+1]=cp[i]+Pi[i]
   }
   cp<-cp/cp[N+1]
-  
   # Get uniforms
   U <- runif(N,0,1)
   
   # Bin up data based and get counts of data in each bin
   hist_u<-hist(U, breaks = cp,plot = FALSE)
   bin_counts<-hist_u$counts
-  
+
   # Form the new samples
-  s_prime<- matrix(0,N,1)
+  s_prime<- matrix(0,N,3)
   
   # For each number in the bin count total a sample of that is to appear in s_prime
   j<-1
   for(i in 1:N){
     while(bin_counts[i]!=0 && j<N+1){
       bin_counts[i]=bin_counts[i]-1
-      s_prime[j] <- s[i]
+      s_prime[j,1] <- S[i,1]
+      s_prime[j,2] <- S[i,2]
+      s_prime[j,3] <- S[i,3]
       j<-j+1
     }
   }
@@ -285,42 +327,55 @@ select <-function(S,Pi){
 ###   S - samples (N-by-3) xc,yc,theta columns 
 ###   Pi - weights for proposed distributions
 ###   step_num - what step of the iteration are we on?
+###   framexy - yep
+###   N - number of samples
 ### Outputs:
 ###   
 ##############################################################################
 
-iterate<- function(q,S,Pi,framexy){
-  # Get length
-  N = length(S)
+# (***) need to fix this return statement
+# (***) work out data frame kinks
+iterate<- function(q,S,Pi,framexy,N){
+  
   # SELECT samples/proposals based on weights
-  S_prime <- select(S,Pi)
+  S_prime <- select(S,Pi,N)
+  
   # PROPOGATE the samples forward 
   for(i in 1:N){
     S_prime[i,]<-motion(S_prime[i,1],S_prime[i,2],S_prime[i,3])
   }
+  
   # OBSERVE color distributions
-  # Get tracking rectangles get_rect to get the rectangles (*** mbc to do some plots here)
-  rects<-matrix(0,N,1)
+  # Get tracking rectangles get_rect to get the rectangles 
+  # (***) got a problem here in rects[i] because we're trying to store a data frame in an array
+  rects<-list()
   for(i in 1:N){
-    rects[i]<-get_rect(S_prime[i,1],S_prime[i,2],S_prime[i,3],framexy)
+    rects[[i]]<-get_rect(S_prime[i,1],S_prime[i,2],S_prime[i,3],framexy)
   }
+  
   # Get color distributions (*** seconds dimension (10) could be changed to vairable because of the bin#s)
-  dists<-matrix(0,N,10)
+  dists<-list()
   for(i in 1:N){
-    dists[i]<-get_p(S_prime[i,1],S_prime[i,2],S_prime[i,3],rects[i])
+    dists[[i]]<-get_p(S_prime[i,1],S_prime[i,2],S_prime[i,3],rects[[i]],nlevels)
   }
   # Get Bhattacharyya distance
   ds<-matrix(0,N,1)
   for(i in 1:N){
-    ds[i]<-get_d(dists[i],q)
+    ds[i]<-get_d(dists[[i]],q)
   }
   # Weight each sample
   for(i in 1:N){
-    Pi[i]<-get_spi(dists[i],ds[i],q)
+    Pi[i]<-get_spi(dists[[i]],ds[i],q)
   }
-  # ESTIMATE
-  Expec<-sum(Pi*S_prime)
+  Pi<-Pi/sum(Pi)
+  # ESTIMATE (***)
+  Expec<-matrix(0,1,3)
+  Expec[1,1]<-sum(Pi*S_prime[,1])
+  Expec[1,2]<-sum(Pi*S_prime[,2])
+  Expec[1,3]<-sum(Pi*S_prime[,3])
+  # Group em
+  returnlist<-list(S_prime,Pi,Expec)
   
-  return(S_prime,Pi,Expec)
+  return(returnlist)
 }
 
