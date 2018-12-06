@@ -31,7 +31,8 @@ image_read<-function(frame_num){
   # for plotting purposes
   df <- dim(frame)
   # create a blank canvas (*** edit to change 1 to frame num in the title after main =)
-  plot(c(0,df[2]),c(0,df[1]),type="n",axes=F,xlab = "",ylab = "", main="frame 1")
+  title<-paste("frame",toString(frame_num),sep="")
+  plot(c(0,df[2]),c(0,df[1]),type="n",axes=F,xlab = "",ylab = "", main=title)
   rasterImage(frame,0,0,df[2],df[1])
   
   return(frame)
@@ -270,7 +271,7 @@ motion<-function(xc,yc,theta){
 # (*** sigma_sq = 1/40 is super arbitrary)
 get_spi<-function(p,d,q){
   # dont know what to put for this sigma at the moment
-  sigma_sq <- 1/40
+  sigma_sq <- 1/100
   spi<-1/sqrt(2*pi*sigma_sq)*exp(-d^2/(2*sigma_sq))
   return(spi) #added a return
 }
