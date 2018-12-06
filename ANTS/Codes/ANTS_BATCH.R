@@ -16,7 +16,8 @@ library(png)
 rx<-30
 ry<-10
 nlevels<-10
-nsamples<-10
+nsamples<-40
+steps <-100
 
 ########################
 ### Get The Original ###
@@ -53,15 +54,12 @@ S<-rep.row(c(xc,yc,theta),nsamples)
 
 Pi<-matrix(1/nsamples,nsamples,1)
 
-## Push it
-### *** Debugging iterate function
-### *** Debugged function: select, motion
-### *** Next to debug: get_rect 
-### *** Something wrong with expec must look into ugh
+## Push it 
 
 
+for(j in 1:steps){
 # get new image
-frame<-image_read(2)
+frame<-image_read(j)
 framexy<-frame_to_xy(frame)
 # use iterate step
 # holder
@@ -72,6 +70,6 @@ S<-receivelist[[1]]
 Pi<-receivelist[[2]]
 Expec<-receivelist[[3]]
 
-frame<-image_read(2)
+frame<-image_read(j)
 get_rect(Expec[1],Expec[2],Expec[3],framexy)
-
+}
